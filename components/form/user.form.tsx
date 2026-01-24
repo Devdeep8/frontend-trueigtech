@@ -11,13 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import axios from "axios";
@@ -27,7 +21,6 @@ export interface UserFormData {
   name: string;
   email: string;
   password: string;
-  role: "user" | "admin";
 }
 
 export default function UserForm() {
@@ -36,7 +29,6 @@ export default function UserForm() {
     name: "",
     email: "",
     password: "",
-    role: "user",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,7 +74,7 @@ export default function UserForm() {
         formData,
         {
           withCredentials: true, // 🔥 REQUIRED
-        }
+        },
       );
 
       console.log(response.data);
@@ -95,17 +87,47 @@ export default function UserForm() {
           name: "",
           email: "",
           password: "",
-          role: "user",
         });
       }
 
       // Reset form after successful submission
-    } catch (err) {
+    } catch (err: unknown) {
       // Handle errors
-      if (err instanceof Error) {
-        setError(err.message);
+      if (axios.isAxiosError(err)) {
+        // Backend responded with status code
+        if (err.response) {
+          const status = err.response.status;
+          const message = err.response.data?.message || "Something went wrong";
+
+          // You can customize messages by status code if needed
+          switch (status) {
+            case 400:
+              setError(message || "Invalid input");
+              break;
+            case 401:
+              setError("Unauthorized. Please login again.");
+              break;
+            case 403:
+              setError("You do not have permission to perform this action.");
+              break;
+            case 404:
+              setError("User not found, Please register");
+              break;
+            case 409:
+              setError(message || "User already exists");
+              break;
+            case 500:
+              setError("Server error. Please try again later.");
+              break;
+            default:
+              setError(message);
+          }
+        } else {
+          // No response = network error
+          setError("Network error. Please check your connection.");
+        }
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setError("An unexpected error occurred.");
       }
     } finally {
       setIsSubmitting(false);
@@ -203,24 +225,6 @@ export default function UserForm() {
             </div>
 
             {/* Role Select */}
-            <div className="space-y-2">
-              <Label htmlFor="role">User Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) =>
-                  handleChange("role", value as "user" | "admin")
-                }
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id="role" className="w-full">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             {/* Submit Button */}
             <Button

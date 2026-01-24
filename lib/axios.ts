@@ -3,7 +3,7 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_BACKEND_API_URL,
-  withCredentials: true, // cookies included
+  withCredentials: true,
 });
 
 let isRefreshing = false;
@@ -19,6 +19,12 @@ api.interceptors.response.use(
   async error => {
     const originalRequest = error.config;
 
+    // 🚨 DO NOT intercept refresh endpoint itself
+    if (originalRequest.url?.includes("/api/auth/refresh")) {
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -31,12 +37,12 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        await api.post("/api/auth/refresh"); // backend updates HttpOnly access token
+        await api.post("/api/auth/refresh");
         processQueue(null);
-        return api(originalRequest); // retry original request
+        return api(originalRequest);
       } catch (err) {
         processQueue(err);
-        window.location.href = "/login"; // only logout if refresh failed
+        window.location.href = "/login";
         return Promise.reject(err);
       } finally {
         isRefreshing = false;

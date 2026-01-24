@@ -65,6 +65,33 @@ interface Game {
   isActive: boolean;
 }
 
+interface Permission {
+  id: string;
+  key: string;
+  description: string;
+}
+
+interface UserRole {
+  permissions: Permission[];
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  userRole: UserRole;
+}
+
+/* ---------------- Permission Helper ---------------- */
+const hasPermission = (user: User | null, permissionKey: string): boolean => {
+  if (!user?.userRole?.permissions) return false;
+  
+  return user.userRole.permissions.some(
+    (permission) => permission.key === permissionKey
+  );
+};
+
 /* ---------------- Pagination Helper ---------------- */
 const getPaginationRange = (current: number, total: number, delta = 2) => {
   const range: (number | "ellipsis")[] = [];
@@ -117,8 +144,11 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
       await api.put(`/api/game/update/${game.id}`, {
         data: formData,
       });
+      toast.success("Game updated successfully");
       onSuccess();
       onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update game");
     } finally {
       setIsSaving(false);
     }
@@ -155,7 +185,7 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
 }
 
 /* ---------------- Main Table ---------------- */
-export default function GameTable({ user }: any) {
+export default function GameTable({ user }: { user: User }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -170,18 +200,30 @@ export default function GameTable({ user }: any) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [gameToDelete, setGameToDelete] = useState<Game | null>(null);
 
+  // Permission checks
+  const canUpdateGame = hasPermission(user, "game.update");
+  const canDeleteGame = hasPermission(user, "game.delete");
+  const canToggleStatus = hasPermission(user, "game.update"); // or create a separate "game.toggle" permission
+  
+  // Show actions column if user has any management permission
+  const showActionsColumn = canUpdateGame || canDeleteGame || canToggleStatus;
+
   const fetchGames = async (pageNumber = page, silent = false) => {
     if (!silent) setLoading(true);
 
-    const res = await api.get(
-      `/api/game/showallgames?page=${pageNumber}&limit=10`
-    );
+    try {
+      const res = await api.get(
+        `/api/game/showallgames?page=${pageNumber}&limit=10`
+      );
 
-    setGames(res.data.games);
-    setTotalPages(res.data.pagination.totalPages);
-    setPage(res.data.pagination.currentPage);
-
-    if (!silent) setLoading(false);
+      setGames(res.data.games);
+      setTotalPages(res.data.pagination.totalPages);
+      setPage(res.data.pagination.currentPage);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to fetch games");
+    } finally {
+      if (!silent) setLoading(false);
+    }
   };
 
   const goToPage = (p: number) => {
@@ -202,7 +244,14 @@ export default function GameTable({ user }: any) {
   }, [page]);
 
   if (loading) return <p>Loading...</p>;
+
   const toggleGameStatus = async (gameId: string, currentState: boolean) => {
+    // Check permission before toggling
+    if (!canToggleStatus) {
+      toast.error("You don't have permission to change game status");
+      return;
+    }
+
     // 1️⃣ Optimistic update
     setGames((prev) =>
       prev.map((g) => (g.id === gameId ? { ...g, isActive: !currentState } : g))
@@ -213,7 +262,8 @@ export default function GameTable({ user }: any) {
       await api.patch("/api/game/toggleactive", {
         gameId,
       });
-    } catch (error) {
+      toast.success("Game status updated");
+    } catch (error: any) {
       // 3️⃣ Rollback on failure
       setGames((prev) =>
         prev.map((g) =>
@@ -221,8 +271,26 @@ export default function GameTable({ user }: any) {
         )
       );
 
+      toast.error(error.response?.data?.message || "Failed to update game status");
       console.error("Failed to update game status", error);
     }
+  };
+
+  const handleEdit = (game: Game) => {
+    if (!canUpdateGame) {
+      toast.error("You don't have permission to edit games");
+      return;
+    }
+    setEditingGame(game);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (game: Game) => {
+    if (!canDeleteGame) {
+      toast.error("You don't have permission to delete games");
+      return;
+    }
+    setGameToDelete(game);
   };
 
   return (
@@ -242,7 +310,7 @@ export default function GameTable({ user }: any) {
             <TableHead>Genre</TableHead>
             <TableHead>Image</TableHead>
             <TableHead>URL</TableHead>
-            {user?.role === "admin" && <TableHead />}
+            {showActionsColumn && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -257,12 +325,12 @@ export default function GameTable({ user }: any) {
                 )}
               </TableCell>
               <TableCell>
-                <a href={game.gameUrl ?? "#"} target="_blank">
+                <a href={game.gameUrl ?? "#"} target="_blank" className="text-blue-600 hover:underline">
                   Play
                 </a>
               </TableCell>
 
-              {user?.role === "admin" && (
+              {showActionsColumn && (
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -271,34 +339,41 @@ export default function GameTable({ user }: any) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()} // prevent close
-                        className="flex items-center justify-between cursor-default"
-                      >
-                        <span>Status</span>
-                        <Switch
-                          checked={game.isActive}
-                          onCheckedChange={() =>
-                            toggleGameStatus(game.id, game.isActive)
-                          }
-                        />
-                      </DropdownMenuItem>
+                      {/* Show toggle status only if user has permission */}
+                      {canToggleStatus && (
+                        <>
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()} // prevent close
+                            className="flex items-center justify-between cursor-default"
+                          >
+                            <span>Status</span>
+                            <Switch
+                              checked={game.isActive}
+                              onCheckedChange={() =>
+                                toggleGameStatus(game.id, game.isActive)
+                              }
+                            />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
 
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setEditingGame(game);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => setGameToDelete(game)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                      </DropdownMenuItem>
+                      {/* Show edit only if user has permission */}
+                      {canUpdateGame && (
+                        <DropdownMenuItem onClick={() => handleEdit(game)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                      )}
+
+                      {/* Show delete only if user has permission */}
+                      {canDeleteGame && (
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => handleDelete(game)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -366,14 +441,15 @@ export default function GameTable({ user }: any) {
                   });
                   console.log("Delete response:", data);
 
+                  toast.success("Game deleted successfully");
                   // Refresh games after deletion
                   fetchGames(page);
                   setGameToDelete(null);
-                } catch (err : any) {
-                    toast.error(err.response?.data.message)
+                } catch (err: any) {
+                  toast.error(err.response?.data?.message || "Failed to delete game");
                   console.log(
                     "Failed to delete game:",
-                    err.response?.data.message || err.message
+                    err.response?.data?.message || err.message
                   );
                 }
               }}
