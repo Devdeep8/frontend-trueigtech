@@ -1,4 +1,3 @@
-
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -184,7 +183,7 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
     if (!game) return;
     setIsSaving(true);
     try {
-      await api.put(`/api/game/update/${game.id}`, { data: formData });
+      await api.patch(`/api/game/update/${game.id}`, { data: formData });
       toast.success("Game updated successfully");
       onSuccess();
       onOpenChange(false);
@@ -378,10 +377,11 @@ export default function GameGrid({ user }: { user: User }) {
       const res = await api.get(`/api/game/showallgames?${queryString}`);
 
       // --- FIX: Updated to map API structure { success, message, meta, games } ---
-      setGames(res.data.games);
+      setGames(res.data.data.games);
+      console.log(res)
 
-      if (res.data.meta) {
-        const { total, limit, page: currentPage } = res.data.meta;
+      if (res.data.data.page) {
+        const { total, limit, page: currentPage } = res.data.data.page;
         setTotalPages(Math.ceil(total / limit));
         setPage(currentPage);
       } else {
@@ -518,21 +518,35 @@ export default function GameGrid({ user }: { user: User }) {
       toast.error("You don't have permission to change game status");
       return;
     }
+
+    const nextState = !currentState;
+
+    // Optimistic update
     setGames((prev) =>
-      prev.map((g) =>
-        g.id === gameId ? { ...g, isActive: !currentState } : g,
-      ),
+      prev.map((g) => (g.id === gameId ? { ...g, isActive: nextState } : g)),
     );
+
     try {
-      await api.patch("/api/game/toggleactive", { gameId });
+      await api.patch(`/api/game/update/${gameId}`, {
+        data: {
+          isActive: nextState,
+        },
+      });
+
       toast.success("Game status updated");
     } catch (error: any) {
+      // Rollback on failure
       setGames((prev) =>
         prev.map((g) =>
           g.id === gameId ? { ...g, isActive: currentState } : g,
         ),
       );
-      toast.error(error.response?.data?.message || "Failed to update status");
+
+      toast.error(
+        error.response?.data?.error?.message ||
+          error.response?.data?.message ||
+          "Failed to update status",
+      );
     }
   };
 
@@ -976,7 +990,7 @@ export default function GameGrid({ user }: { user: User }) {
                           className="mt-1"
                         />
                       )}
-                      
+
                       <div className="flex-1 min-w-0">
                         <CardTitle className="line-clamp-1 text-lg">
                           {game.name}
@@ -993,7 +1007,11 @@ export default function GameGrid({ user }: { user: User }) {
                     {canManageGames && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-8 w-8">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

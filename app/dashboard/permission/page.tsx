@@ -41,7 +41,7 @@ export default function RolesWithPermissionsPage() {
         api.get("/api/permissions/all"),
       ]);
 
-      setRoles(rolesRes.data.data.rolesWithPermissions);
+      setRoles(rolesRes.data.data);
       setAllPermissions(permsRes.data.data.permissions ?? permsRes.data.data);
     } catch (error) {
       handleApiError(error);

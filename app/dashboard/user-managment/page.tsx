@@ -66,7 +66,8 @@ export default async function UserPage() {
   // buttons will be disabled/hidden because we have no roles to assign.
   let roles: any[] = [];
   if (results[2].status === "fulfilled") {
-    roles = results[2].value.data.data.roles || [];
+    
+    roles = results[2].value.data.data || [];
   } else {
     // Optional: Log that roles were skipped, but don't crash the page
     console.warn("Roles data skipped (likely due to permission).");

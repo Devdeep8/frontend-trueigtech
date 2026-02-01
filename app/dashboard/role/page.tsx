@@ -60,9 +60,9 @@ export default function RolesPage() {
         api.get("/api/permissions/group"),
       ]);
 
-      console.log(rolesRes.data.data.rolesWithPermissions, permsRes.data.data)
+      console.log(rolesRes.data.data, permsRes.data.data)
 
-      setRoles(rolesRes.data.data.rolesWithPermissions || []);
+      setRoles(rolesRes.data.data || []);
       setPermissions(permsRes.data.data);
     } catch (error) {
       handleApiError(error);
