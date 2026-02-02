@@ -15,6 +15,7 @@ export default async function UserPage() {
     api.get("/api/roles/all"),        // Index 2: Roles List
   ]);
 
+
   // ================= 1. AUTH CHECK =================
   // If we can't get the current user, they are effectively logged out
   if (results[0].status === "rejected") {
@@ -28,7 +29,7 @@ export default async function UserPage() {
       </div>
     );
   }
-  const currentUser = results[0].value.data.data.user;
+  const currentUser = results[0].value.data.data;
 
   // ================= 2. USERS PERMISSION CHECK =================
   // Check if the request failed due to 403 (Forbidden)

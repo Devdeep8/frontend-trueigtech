@@ -64,7 +64,7 @@ type Permission = {
   description?: string;
 };
 
-type UserRole = {
+type role = {
   id: string;
   name: string;
   description?: string;
@@ -72,7 +72,7 @@ type UserRole = {
 };
 
 type User = {
-  userRole: UserRole;
+  role: role;
   id: string;
   name: string;
   email: string;
@@ -94,7 +94,7 @@ interface UserTableProps {
 
 // Helper to check permissions
 const hasPermission = (user: any, key: string) => {
-  return user?.userRole?.permissions?.some((p: Permission) => p.key === key);
+  return user?.role?.permissions?.some((p: Permission) => p.key === key);
 };
 
 export default function UserTable({
@@ -119,7 +119,7 @@ export default function UserTable({
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<string>("");
+  const [newrole, setNewrole] = useState<string>("");
   const [isSavingCreate, setIsSavingCreate] = useState(false);
 
   // Check permissions
@@ -162,11 +162,11 @@ export default function UserTable({
     // Snapshot for revert
     const previousUsers = [...users];
 
-    // 1. Optimistic: Update UI (update userRole object)
+    // 1. Optimistic: Update UI (update role object)
     setUsers((prev) =>
       prev.map((u) =>
         u.id === userId
-          ? { ...u, userRole: { ...u.userRole, id: newRoleId, name: newRoleName } }
+          ? { ...u, role: { ...u.role, id: newRoleId, name: newRoleName } }
           : u
       )
     );
@@ -241,7 +241,7 @@ export default function UserTable({
 
   // 5. CREATE USER
   const handleSaveCreate = async () => {
-    if (!newUserName || !newUserEmail || !newUserPassword || !newUserRole) {
+    if (!newUserName || !newUserEmail || !newUserPassword || !newrole) {
       handleApiError("Please fill in all fields");
       return;
     }
@@ -253,7 +253,7 @@ export default function UserTable({
         name: newUserName,
         email: newUserEmail,
         password: newUserPassword,
-        roleId: newUserRole,
+        roleId: newrole,
       });
       
       // 2. Optimistic: Add to top of list (Using dummy user created from response or inputs)
@@ -264,7 +264,7 @@ export default function UserTable({
         email: newUserEmail,
         isActive: true,
         created_at: new Date().toISOString(),
-        userRole: roles.find(r => r.id === newUserRole) || { name: "Loading...", permissions: [] }
+        role: roles.find(r => r.id === newrole) || { name: "Loading...", permissions: [] }
       };
       
       setUsers((prev) => [createdUser, ...prev]);
@@ -276,7 +276,7 @@ export default function UserTable({
       setNewUserName("");
       setNewUserEmail("");
       setNewUserPassword("");
-      setNewUserRole("");
+      setNewrole("");
     } catch (err: any) {
       handleApiError(err);
     } finally {
@@ -354,17 +354,17 @@ export default function UserTable({
               <TableCell>
                 <Badge
                   variant={
-                    user.userRole.name === "super_admin" ? "default" : "secondary"
+                    user.role.name === "super_admin" ? "default" : "secondary"
                   }
                 >
-                  {user.userRole.name}
+                  {user.role.name}
                 </Badge>
               </TableCell>
 
               <TableCell>
                 <div className="flex flex-wrap gap-1">
-                  {user.userRole.permissions && user.userRole.permissions.length > 0 ? (
-                    user.userRole.permissions.map((permission) => (
+                  {user.role.permissions && user.role.permissions.length > 0 ? (
+                    user.role.permissions.map((permission) => (
                       <Badge
                         key={permission.id}
                         variant="outline"
@@ -422,10 +422,10 @@ export default function UserTable({
                                 onClick={() =>
                                   handleRoleChange(user.id, role.id, role.name)
                                 }
-                                disabled={user.userRole.id === role.id}
+                                disabled={user.role.id === role.id}
                               >
                                 {role.name}
-                                {user.userRole.id === role.id && " (Current)"}
+                                {user.role.id === role.id && " (Current)"}
                               </DropdownMenuItem>
                             ))}
                           </DropdownMenuSubContent>
@@ -563,7 +563,7 @@ export default function UserTable({
               <Label htmlFor="new-role" className="text-right">
                 Role
               </Label>
-              <Select onValueChange={setNewUserRole} value={newUserRole}>
+              <Select onValueChange={setNewrole} value={newrole}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>

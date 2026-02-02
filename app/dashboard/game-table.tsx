@@ -71,7 +71,7 @@ interface Permission {
   description: string;
 }
 
-interface UserRole {
+interface role {
   permissions: Permission[];
 }
 
@@ -79,15 +79,14 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: string;
-  userRole: UserRole;
+  role: role;
 }
 
 /* ---------------- Permission Helper ---------------- */
 const hasPermission = (user: User | null, permissionKey: string): boolean => {
-  if (!user?.userRole?.permissions) return false;
+  if (!user?.role?.permissions) return false;
   
-  return user.userRole.permissions.some(
+  return user.role.permissions.some(
     (permission) => permission.key === permissionKey
   );
 };

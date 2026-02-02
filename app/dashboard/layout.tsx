@@ -25,7 +25,7 @@ export default function DashboardLayout({
     const fetchUser = async () => {
       try {
         const res = await api.get("/api/auth/me");
-        setUser(res.data.data.user); // Adjust path based on your API response
+        setUser(res.data.data); // Adjust path based on your API response
       } catch (err) {
         console.error("Failed to fetch user:", err);
       } finally {

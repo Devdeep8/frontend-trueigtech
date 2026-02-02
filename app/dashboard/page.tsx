@@ -11,7 +11,7 @@ interface Permission {
   description: string;
 }
 
-interface UserRole {
+interface role {
   id: string;
   name: string;
   description: string;
@@ -22,13 +22,12 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: string;
-  userRole: UserRole;
+  role: role;
 }
 
 const hasPermission = (user: User | null, permissionKey: string): boolean => {
-  if (!user?.userRole?.permissions) return false;
-  return user.userRole.permissions.some(
+  if (!user?.role?.permissions) return false;
+  return user.role.permissions.some(
     (permission) => permission.key === permissionKey
   );
 };
@@ -41,7 +40,8 @@ export default function Dashboard() {
     const fetchUser = async () => {
       try {
         const res = await api.get("/api/auth/me");
-        setUser(res.data.data.user);
+
+        setUser(res.data.data);
       } catch (err) {
         console.error("Failed to fetch user:", err);
       } finally {

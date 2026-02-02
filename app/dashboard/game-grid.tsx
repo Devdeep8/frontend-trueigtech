@@ -64,7 +64,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox"; // ADDED
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   MoreHorizontal,
   Pencil,
@@ -83,10 +83,11 @@ import { cn } from "@/lib/utils";
 // --- Types ---
 
 interface Game {
+  
   id: string;
   name: string | null;
   description: string | null;
-  genre: string | null;
+  category : Category | null;
   imageUrl: string | null;
   gameUrl: string | null;
   isActive: boolean;
@@ -96,11 +97,16 @@ interface Game {
   updatedAt?: string;
 }
 
+interface Category {
+  id: string;
+  name: string;
+}
+
 interface Permission {
   key: string;
 }
 
-interface UserRole {
+interface role {
   name: string;
   permissions: Permission[];
 }
@@ -108,23 +114,8 @@ interface UserRole {
 interface User {
   id: string;
   name: string;
-  userRole: UserRole;
+  role: role;
 }
-
-// Available genres
-const GENRES = [
-  "Action",
-  "Adventure",
-  "Racing",
-  "Puzzle",
-  "Strategy",
-  "Sports",
-  "RPG",
-  "Simulation",
-  "Horror",
-  "Arcade",
-  "Survival_horror",
-];
 
 const SORT_OPTIONS = [
   { value: "createdAt", label: "Date Created" },
@@ -135,8 +126,8 @@ const SORT_OPTIONS = [
 // --- Helpers ---
 
 const hasPermission = (user: User | null, permissionKey: string): boolean => {
-  if (!user?.userRole?.permissions) return false;
-  return user.userRole.permissions.some(
+  if (!user?.role?.permissions) return false;
+  return user.role.permissions.some(
     (permission) => permission.key === permissionKey,
   );
 };
@@ -183,7 +174,10 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
     if (!game) return;
     setIsSaving(true);
     try {
-      await api.patch(`/api/game/update/${game.id}`, { data: formData });
+      const data = await api.patch(`/api/game/update/${game.id}`, {
+        data: formData,
+      });
+      console.log(data);
       toast.success("Game updated successfully");
       onSuccess();
       onOpenChange(false);
@@ -238,11 +232,12 @@ export default function GameGrid({ user }: { user: User }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryName, setCategoryName] = useState("all");
+  
   // Filter states
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [genre, setGenre] = useState("all");
   const [status, setStatus] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
@@ -259,16 +254,29 @@ export default function GameGrid({ user }: { user: User }) {
   const canDeleteGame = hasPermission(user, "game.delete");
   const canToggleStatus = hasPermission(user, "game.update");
   const canManageGames = canUpdateGame || canDeleteGame || canToggleStatus;
-  const canBulkManage = canUpdateGame || canDeleteGame; // Use specific permissions for bulk
+  const canBulkManage = canUpdateGame || canDeleteGame;
 
   // Bulk selection
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
+
+  // --- Fetch categories on mount ---
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await api.get("/api/categories");
+        setCategories(res.data.data.categories);
+      } catch {
+        toast.error("Failed to load categories");
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // --- Initialize filters from URL on mount ---
   useEffect(() => {
     const pageFromUrl = Number(searchParams.get("page")) || 1;
     const searchFromUrl = searchParams.get("search") || "";
-    const genreFromUrl = searchParams.get("genre") || "all";
+    const categoryFromUrl = searchParams.get("category") || "all";
     const statusFromUrl = searchParams.get("status") || "all";
     const sortByFromUrl = searchParams.get("sortBy") || "createdAt";
     const sortOrderFromUrl = (searchParams.get("sortOrder") || "DESC") as
@@ -280,7 +288,7 @@ export default function GameGrid({ user }: { user: User }) {
     setPage(pageFromUrl);
     setSearch(searchFromUrl);
     setDebouncedSearch(searchFromUrl);
-    setGenre(genreFromUrl);
+    setCategoryName(categoryFromUrl);
     setStatus(statusFromUrl);
     setSortBy(sortByFromUrl);
     setSortOrder(sortOrderFromUrl);
@@ -291,7 +299,7 @@ export default function GameGrid({ user }: { user: User }) {
     fetchGames(
       pageFromUrl,
       searchFromUrl,
-      genreFromUrl,
+      categoryFromUrl,
       statusFromUrl,
       sortByFromUrl,
       sortOrderFromUrl,
@@ -316,12 +324,22 @@ export default function GameGrid({ user }: { user: User }) {
     }
   }, [debouncedSearch]);
 
-  // --- Build query string from filters ---
+  // --- Helper to get category ID from name ---
+  const getCategoryIdFromName = useCallback(
+    (categoryName: string) => {
+      if (categoryName === "all") return null;
+      const category = categories.find((c) => c.name === categoryName);
+      return category?.id || null;
+    },
+    [categories],
+  );
+
+  // --- Build query string for URL (uses category name) ---
   const buildQueryString = useCallback(
     (
       pageNum: number,
       searchTerm: string,
-      genreFilter: string,
+      category: string,
       statusFilter: string,
       sort: string,
       order: string,
@@ -333,8 +351,8 @@ export default function GameGrid({ user }: { user: User }) {
       params.set("limit", "12");
 
       if (searchTerm) params.set("search", searchTerm);
-      if (genreFilter && genreFilter !== "all")
-        params.set("genre", genreFilter);
+      if (category && category !== "all")
+        params.set("category", category);
       if (statusFilter && statusFilter !== "all")
         params.set("status", statusFilter);
       if (sort) params.set("sortBy", sort);
@@ -348,11 +366,48 @@ export default function GameGrid({ user }: { user: User }) {
     [],
   );
 
+  // --- Build API query string (uses category ID) ---
+  const buildApiQueryString = useCallback(
+    (
+      pageNum: number,
+      searchTerm: string,
+      category: string,
+      statusFilter: string,
+      sort: string,
+      order: string,
+      startDate?: Date,
+      endDate?: Date,
+    ) => {
+      const params = new URLSearchParams();
+      params.set("page", pageNum.toString());
+      params.set("limit", "12");
+
+      if (searchTerm) params.set("search", searchTerm);
+      
+      // Get category ID from name and add to filters
+      const categoryId = getCategoryIdFromName(category);
+      if (categoryId) {
+        params.set("categoryId", categoryId);
+      }
+      
+      if (statusFilter && statusFilter !== "all")
+        params.set("status", statusFilter);
+      if (sort) params.set("sortBy", sort);
+      if (order) params.set("sortOrder", order);
+      if (startDate)
+        params.set("dateFrom", startDate.toISOString().split("T")[0]);
+      if (endDate) params.set("dateTo", endDate.toISOString().split("T")[0]);
+
+      return params.toString();
+    },
+    [getCategoryIdFromName],
+  );
+
   // --- Fetch games with all filters ---
   const fetchGames = async (
     pageNumber = page,
     searchTerm = debouncedSearch,
-    genreFilter = genre,
+    category = categoryName,
     statusFilter = status,
     sort = sortBy,
     order = sortOrder,
@@ -363,10 +418,11 @@ export default function GameGrid({ user }: { user: User }) {
     if (!silent) setLoading(true);
 
     try {
-      const queryString = buildQueryString(
+      // Use API query string (with categoryId) for backend
+      const apiQueryString = buildApiQueryString(
         pageNumber,
         searchTerm,
-        genreFilter,
+        category,
         statusFilter,
         sort,
         order,
@@ -374,11 +430,12 @@ export default function GameGrid({ user }: { user: User }) {
         endDate,
       );
 
-      const res = await api.get(`/api/game/showallgames?${queryString}`);
+      console.log(apiQueryString, "API query string with categoryId");
 
-      // --- FIX: Updated to map API structure { success, message, meta, games } ---
+      const res = await api.get(`/api/game/showallgames?${apiQueryString}`);
+      console.log(res.data.data);
+
       setGames(res.data.data.games);
-      console.log(res)
 
       if (res.data.data.page) {
         const { total, limit, page: currentPage } = res.data.data.page;
@@ -396,10 +453,11 @@ export default function GameGrid({ user }: { user: User }) {
 
   // --- Update URL and fetch when filters change ---
   const handleFilterChange = useCallback(() => {
+    // Use buildQueryString (with category name) for URL
     const queryString = buildQueryString(
       1,
       debouncedSearch,
-      genre,
+      categoryName,
       status,
       sortBy,
       sortOrder,
@@ -411,19 +469,19 @@ export default function GameGrid({ user }: { user: User }) {
     fetchGames(
       1,
       debouncedSearch,
-      genre,
+      categoryName,
       status,
       sortBy,
       sortOrder,
       dateFrom,
       dateTo,
     );
-  }, [debouncedSearch, genre, status, sortBy, sortOrder, dateFrom, dateTo]);
+  }, [debouncedSearch, categoryName, status, sortBy, sortOrder, dateFrom, dateTo, buildQueryString, fetchGames]);
 
   // --- Handle filter changes (except search which is debounced) ---
   useEffect(() => {
     if (
-      genre !== "all" ||
+      categoryName !== "all" ||
       status !== "all" ||
       sortBy !== "createdAt" ||
       sortOrder !== "DESC" ||
@@ -432,13 +490,13 @@ export default function GameGrid({ user }: { user: User }) {
     ) {
       handleFilterChange();
     }
-  }, [genre, status, sortBy, sortOrder, dateFrom, dateTo]);
+  }, [categoryName, status, sortBy, sortOrder, dateFrom, dateTo]);
 
   // --- Clear all filters ---
   const clearFilters = () => {
     setSearch("");
     setDebouncedSearch("");
-    setGenre("all");
+    setCategoryName("all");
     setStatus("all");
     setSortBy("createdAt");
     setSortOrder("DESC");
@@ -452,7 +510,7 @@ export default function GameGrid({ user }: { user: User }) {
   // --- Check if any filters are active ---
   const hasActiveFilters =
     search ||
-    genre !== "all" ||
+    categoryName !== "all" ||
     status !== "all" ||
     sortBy !== "createdAt" ||
     sortOrder !== "DESC" ||
@@ -461,10 +519,11 @@ export default function GameGrid({ user }: { user: User }) {
 
   // --- Pagination ---
   const goToPage = (p: number) => {
+    // Use buildQueryString (with category name) for URL
     const queryString = buildQueryString(
       p,
       debouncedSearch,
-      genre,
+      categoryName,
       status,
       sortBy,
       sortOrder,
@@ -476,7 +535,7 @@ export default function GameGrid({ user }: { user: User }) {
     fetchGames(
       p,
       debouncedSearch,
-      genre,
+      categoryName,
       status,
       sortBy,
       sortOrder,
@@ -491,7 +550,7 @@ export default function GameGrid({ user }: { user: User }) {
       fetchGames(
         page,
         debouncedSearch,
-        genre,
+        categoryName,
         status,
         sortBy,
         sortOrder,
@@ -504,7 +563,7 @@ export default function GameGrid({ user }: { user: User }) {
   }, [
     page,
     debouncedSearch,
-    genre,
+    categoryName,
     status,
     sortBy,
     sortOrder,
@@ -591,7 +650,7 @@ export default function GameGrid({ user }: { user: User }) {
       fetchGames(
         page,
         debouncedSearch,
-        genre,
+        categoryName,
         status,
         sortBy,
         sortOrder,
@@ -614,7 +673,7 @@ export default function GameGrid({ user }: { user: User }) {
       fetchGames(
         page,
         debouncedSearch,
-        genre,
+        categoryName,
         status,
         sortBy,
         sortOrder,
@@ -650,7 +709,7 @@ export default function GameGrid({ user }: { user: User }) {
           fetchGames(
             page,
             debouncedSearch,
-            genre,
+            categoryName,
             status,
             sortBy,
             sortOrder,
@@ -694,18 +753,18 @@ export default function GameGrid({ user }: { user: User }) {
             </div>
           </div>
 
-          {/* Genre Filter */}
+          {/* Category Filter */}
           <div className="space-y-2">
-            <Label>Genre</Label>
-            <Select value={genre} onValueChange={setGenre}>
+            <Label>Category</Label>
+            <Select value={categoryName} onValueChange={setCategoryName}>
               <SelectTrigger>
-                <SelectValue placeholder="All Genres" />
+                <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Genres</SelectItem>
-                {GENRES.map((g) => (
-                  <SelectItem key={g} value={g}>
-                    {g}
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.name}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -826,12 +885,12 @@ export default function GameGrid({ user }: { user: User }) {
                 />
               </Badge>
             )}
-            {genre !== "all" && (
+            {categoryName !== "all" && (
               <Badge variant="secondary">
-                Genre: {genre}
+                Category: {categoryName}
                 <X
                   className="ml-1 h-3 w-3 cursor-pointer"
-                  onClick={() => setGenre("all")}
+                  onClick={() => setCategoryName("all")}
                 />
               </Badge>
             )}
@@ -995,9 +1054,9 @@ export default function GameGrid({ user }: { user: User }) {
                         <CardTitle className="line-clamp-1 text-lg">
                           {game.name}
                         </CardTitle>
-                        {game.genre && (
+                        {game.category && (
                           <Badge variant="secondary" className="mt-1 text-xs">
-                            {game.genre}
+                            {game.category.name}
                           </Badge>
                         )}
                       </div>
@@ -1152,7 +1211,7 @@ export default function GameGrid({ user }: { user: User }) {
                   fetchGames(
                     page,
                     debouncedSearch,
-                    genre,
+                    categoryName,
                     status,
                     sortBy,
                     sortOrder,

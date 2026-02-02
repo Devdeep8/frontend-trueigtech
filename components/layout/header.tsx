@@ -16,7 +16,7 @@ interface User {
   name: string;
   email: string;
   role: string;
-  userRole?: {
+  role?: {
     name: string;
     permissions: { key: string }[];
   };
@@ -57,9 +57,9 @@ export function DashboardHeader({ user }: { user: User | null }) {
         <h1 className="text-lg font-semibold leading-none">
           {getGreeting()}, {user?.name || "User"}
         </h1>
-        {user?.userRole?.name && (
+        {user?.role?.name && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            {user.userRole.name}
+            {user.role.name}
           </p>
         )}
       </div>

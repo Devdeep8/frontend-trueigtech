@@ -28,7 +28,7 @@ interface User {
   name: string;
   email: string;
   role: string;
-  userRole?: {
+  role?: {
     name: string;
     permissions: { key: string }[];
   };
@@ -86,8 +86,8 @@ const NAV_ITEMS: NavItem[] = [
 
 // Check if user has specific permission
 const hasPermission = (user: User | null, permissionKey: string): boolean => {
-  if (!user?.userRole?.permissions) return false;
-  return user.userRole.permissions.some(
+  if (!user?.role?.permissions) return false;
+  return user.role.permissions.some(
     (permission) => permission.key === permissionKey
   );
 };
@@ -136,7 +136,7 @@ export function AppSidebar({ user }: { user: User | null }) {
             {user?.name || "Guest"}
           </span>
           <span className="text-xs text-muted-foreground truncate">
-            {user?.userRole?.name || "No Role"}
+            {user?.role?.name || "No Role"}
           </span>
         </div>
       </SidebarHeader>
