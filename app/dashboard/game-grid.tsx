@@ -83,11 +83,10 @@ import { cn } from "@/lib/utils";
 // --- Types ---
 
 interface Game {
-  
   id: string;
   name: string | null;
   description: string | null;
-  category : Category | null;
+  category: Category | null;
   imageUrl: string | null;
   gameUrl: string | null;
   isActive: boolean;
@@ -147,14 +146,21 @@ const getPaginationRange = (current: number, total: number, delta = 2) => {
 
 // --- Edit Dialog ---
 
-function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
+function EditGameDialog({
+  game,
+  categories,
+  open,
+  onOpenChange,
+  onSuccess,
+}: any) {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    genre: "",
+    categoryId: "",
     imageUrl: "",
     gameUrl: "",
   });
+
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -162,7 +168,7 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
       setFormData({
         name: game.name || "",
         description: game.description || "",
-        genre: game.genre,
+        categoryId: game.category?.id || "",
         imageUrl: game.imageUrl || "",
         gameUrl: game.gameUrl || "",
       });
@@ -172,12 +178,14 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!game) return;
+
     setIsSaving(true);
+    console.log(formData);
     try {
-      const data = await api.patch(`/api/game/update/${game.id}`, {
+      await api.patch(`/api/game/update/${game.id}`, {
         data: formData,
       });
-      console.log(data);
+
       toast.success("Game updated successfully");
       onSuccess();
       onOpenChange(false);
@@ -190,26 +198,83 @@ function EditGameDialog({ game, open, onOpenChange, onSuccess }: any) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-175">
         <DialogHeader>
           <DialogTitle>Edit Game</DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-          {Object.entries(formData).map(([key, value]) => (
-            <div key={key} className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor={key} className="text-right capitalize">
-                {key}
-              </Label>
-              <Input
-                id={key}
-                className="col-span-3"
-                value={value}
-                onChange={(e) =>
-                  setFormData({ ...formData, [key]: e.target.value })
-                }
-              />
-            </div>
-          ))}
+          {/* Name */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Name</Label>
+            <Input
+              className="col-span-3"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Description */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Description</Label>
+            <Input
+              className="col-span-3"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Categories - MULTI SELECT */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Category</Label>
+
+            <Select
+              value={formData.categoryId}
+              onValueChange={(value) =>
+                setFormData({ ...formData, categoryId: value })
+              }
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat: Category) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Image URL */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Image URL</Label>
+            <Input
+              className="col-span-3"
+              value={formData.imageUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, imageUrl: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Game URL */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Game URL</Label>
+            <Input
+              className="col-span-3"
+              value={formData.gameUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, gameUrl: e.target.value })
+              }
+            />
+          </div>
+
           <DialogFooter>
             <Button type="submit" disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Changes"}
@@ -234,7 +299,7 @@ export default function GameGrid({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryName, setCategoryName] = useState("all");
-  
+
   // Filter states
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -351,8 +416,7 @@ export default function GameGrid({ user }: { user: User }) {
       params.set("limit", "12");
 
       if (searchTerm) params.set("search", searchTerm);
-      if (category && category !== "all")
-        params.set("category", category);
+      if (category && category !== "all") params.set("category", category);
       if (statusFilter && statusFilter !== "all")
         params.set("status", statusFilter);
       if (sort) params.set("sortBy", sort);
@@ -383,13 +447,13 @@ export default function GameGrid({ user }: { user: User }) {
       params.set("limit", "12");
 
       if (searchTerm) params.set("search", searchTerm);
-      
+
       // Get category ID from name and add to filters
       const categoryId = getCategoryIdFromName(category);
       if (categoryId) {
         params.set("categoryId", categoryId);
       }
-      
+
       if (statusFilter && statusFilter !== "all")
         params.set("status", statusFilter);
       if (sort) params.set("sortBy", sort);
@@ -476,7 +540,17 @@ export default function GameGrid({ user }: { user: User }) {
       dateFrom,
       dateTo,
     );
-  }, [debouncedSearch, categoryName, status, sortBy, sortOrder, dateFrom, dateTo, buildQueryString, fetchGames]);
+  }, [
+    debouncedSearch,
+    categoryName,
+    status,
+    sortBy,
+    sortOrder,
+    dateFrom,
+    dateTo,
+    buildQueryString,
+    fetchGames,
+  ]);
 
   // --- Handle filter changes (except search which is debounced) ---
   useEffect(() => {
@@ -703,6 +777,7 @@ export default function GameGrid({ user }: { user: User }) {
     <div className="flex flex-col gap-8">
       <EditGameDialog
         game={editingGame}
+        categories={categories}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         onSuccess={() =>
@@ -1051,7 +1126,10 @@ export default function GameGrid({ user }: { user: User }) {
                       )}
 
                       <div className="flex-1 min-w-0">
-                        <CardTitle className="line-clamp-1 text-lg">
+                        <CardTitle
+                          className="text-lg truncate w-30"
+                         
+                        >
                           {game.name}
                         </CardTitle>
                         {game.category && (
